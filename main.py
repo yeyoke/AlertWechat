@@ -76,24 +76,24 @@ def convert_to_wechat_format(alert_data, mention_mobiles, mention_all=False):
     
     if not alerts:
         return {
-            "msgtype": "markdown",
-            "markdown": {
+            "msgtype": "text",
+            "text": {
                 "content": "收到空告警数据"
             }
         }
     
-    # 构建markdown格式的消息
-    markdown_content = "# 🚨 监控告警通知\n\n"
+    # 构建消息内容
+    text_content = "监控告警通知\n\n"
     
     # 添加告警状态统计
     firing_count = sum(1 for alert in alerts if alert.get('status') == 'firing')
     resolved_count = sum(1 for alert in alerts if alert.get('status') == 'resolved')
     
     if firing_count > 0:
-        markdown_content += f"**<font color=\"warning\">⚠️ {firing_count}个告警触发</font>**\n\n"
-    
+        text_content += f"⚠️ {firing_count}个告警触发\n"
     if resolved_count > 0:
-        markdown_content += f"**<font color=\"info\">✅ {resolved_count}个告警已恢复</font>**\n\n"
+        text_content += f"✅ {resolved_count}个告警已恢复\n"
+    text_content += "\n"
     
     # 处理每个告警
     for i, alert in enumerate(alerts):
@@ -109,67 +109,54 @@ def convert_to_wechat_format(alert_data, mention_mobiles, mention_all=False):
         # 告警名称和严重程度
         alert_name = labels.get('alertname', '未知告警')
         severity = labels.get('severity', '未知')
-        severity_color = {
-            'critical': 'warning',
-            'warning': 'warning',
-            'info': 'info'
-        }.get(severity.lower(), 'comment')
         
-        markdown_content += f"### {status_icon} {i+1}. {alert_name}\n\n"
-        markdown_content += f"**严重程度**: <font color=\"{severity_color}\">{severity}</font>\n\n"
+        text_content += f"{status_icon} {alert_name} [{severity}]\n"
         
         # 告警描述
         if 'summary' in annotations:
-            markdown_content += f"**摘要**: {annotations.get('summary')}\n\n"
-        
-        if 'description' in annotations:
-            markdown_content += f"**描述**: {annotations.get('description')}\n\n"
+            text_content += f"描述: {annotations.get('summary')}\n"
         
         # 告警目标
         if 'instance' in labels:
-            markdown_content += f"**实例**: `{labels.get('instance')}`\n\n"
-        
-        if 'job' in labels:
-            markdown_content += f"**任务**: `{labels.get('job')}`\n\n"
+            text_content += f"实例: {labels.get('instance')}\n"
         
         # 告警时间
         if status == 'firing':
-            markdown_content += f"**开始时间**: {starts_at}\n\n"
+            text_content += f"时间: {starts_at}\n"
         else:
-            markdown_content += f"**开始时间**: {starts_at}\n**恢复时间**: {ends_at}\n\n"
+            text_content += f"时间: {starts_at} → {ends_at}\n"
         
         # 添加分隔线
         if i < len(alerts) - 1:
-            markdown_content += "---\n\n"
+            text_content += "───────────────\n"
     
-    # 构建企业微信消息
-    wechat_message = {
-        "msgtype": "markdown",
-        "markdown": {
-            "content": markdown_content
-        }
-    }
-    
-    # 添加@提及功能
-    # 注意：企业微信的markdown消息中的@提及不会生效
-    # 需要使用专门的mentioned_list或mentioned_mobile_list字段
+    # 根据@需求返回不同格式
     if mention_all:
-        # 使用text类型消息，因为markdown不支持@所有人
-        wechat_message = {
+        return {
             "msgtype": "text",
             "text": {
-                "content": f"🚨 监控告警通知\n\n{firing_count}个告警触发，{resolved_count}个告警已恢复\n\n请查看详细信息",
+                "content": text_content,
                 "mentioned_list": ["@all"]
             }
         }
     elif mention_mobiles:
-        # 分割手机号列表
         mobiles = [mobile.strip() for mobile in mention_mobiles.split(',') if mobile.strip()]
         if mobiles:
-            # 对于markdown消息，添加mentioned_mobile_list
-            wechat_message["markdown"]["mentioned_mobile_list"] = mobiles
+            return {
+                "msgtype": "text",
+                "text": {
+                    "content": text_content,
+                    "mentioned_mobile_list": mobiles
+                }
+            }
     
-    return wechat_message
+    # 如果没有@相关需求，也使用text格式
+    return {
+        "msgtype": "text",
+        "text": {
+            "content": text_content
+        }
+    }
 
 if __name__ == '__main__':
     # 从环境变量获取端口，默认为5001
